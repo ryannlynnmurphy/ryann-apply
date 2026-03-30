@@ -1,5 +1,6 @@
 import { AppState } from "./types";
 import { DEFAULT_PROFILE } from "./profile";
+import { SEED_JOBS } from "./jobs-seed";
 
 const STORAGE_KEY = "ryann-apply";
 
@@ -12,7 +13,7 @@ const DEFAULT_SETTINGS = {
 function getDefaultState(): AppState {
   return {
     profile: DEFAULT_PROFILE,
-    jobs: [],
+    jobs: SEED_JOBS,
     applications: [],
     settings: DEFAULT_SETTINGS,
   };
