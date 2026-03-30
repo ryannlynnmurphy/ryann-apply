@@ -12,6 +12,13 @@ const LEVER_BOARDS = [
   "https://jobs.lever.co/djeholdings",
   "https://jobs.lever.co/cloudwalk",
   "https://jobs.lever.co/nphub",
+  "https://jobs.lever.co/openai",
+  "https://jobs.lever.co/anyscale",
+  "https://jobs.lever.co/spotify",
+  "https://jobs.lever.co/figma",
+  "https://jobs.lever.co/ramp",
+  "https://jobs.lever.co/deel",
+  "https://jobs.lever.co/notion",
 ];
 
 const KEYWORDS = [
@@ -29,6 +36,19 @@ const KEYWORDS = [
   "safety",
   "red team",
   "developer relations",
+  "intern",
+  "coordinator",
+  "specialist",
+  "analyst",
+  "trainee",
+  "program",
+  "editorial",
+  "narrative",
+  "design",
+  "ux writing",
+  "conversation design",
+  "technical writing",
+  "documentation",
 ];
 
 function matchesKeywords(title: string): boolean {
@@ -84,17 +104,27 @@ async function scrapeBoard(boardUrl: string): Promise<Partial<Job>[]> {
   return jobs;
 }
 
-export async function scrapeLever(): Promise<Partial<Job>[]> {
+export interface ScrapeResult {
+  jobs: Partial<Job>[];
+  boardsScanned: number;
+  boardsFailed: number;
+}
+
+export async function scrapeLever(): Promise<ScrapeResult> {
   const results: Partial<Job>[] = [];
+  let boardsScanned = 0;
+  let boardsFailed = 0;
 
   for (const board of LEVER_BOARDS) {
     try {
       const jobs = await scrapeBoard(board);
       results.push(...jobs);
-    } catch {
-      // skip silently on failure
+      boardsScanned++;
+    } catch (err) {
+      boardsFailed++;
+      console.error(`Lever scrape failed for ${board}:`, err);
     }
   }
 
-  return results;
+  return { jobs: results, boardsScanned, boardsFailed };
 }

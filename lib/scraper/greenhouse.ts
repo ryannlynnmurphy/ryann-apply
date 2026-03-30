@@ -10,6 +10,20 @@ const GREENHOUSE_BOARDS = [
   "https://job-boards.greenhouse.io/labelbox",
   "https://job-boards.greenhouse.io/10alabs",
   "https://job-boards.eu.greenhouse.io/wonderstudios",
+  // Embed-format boards
+  "https://boards.greenhouse.io/embed/job_board?for=openai",
+  "https://boards.greenhouse.io/embed/job_board?for=figma",
+  "https://boards.greenhouse.io/embed/job_board?for=notion",
+  "https://boards.greenhouse.io/embed/job_board?for=vercel",
+  "https://boards.greenhouse.io/embed/job_board?for=stripe",
+  "https://boards.greenhouse.io/embed/job_board?for=duolingo",
+  "https://boards.greenhouse.io/embed/job_board?for=elevenlabs",
+  "https://boards.greenhouse.io/embed/job_board?for=runway",
+  "https://boards.greenhouse.io/embed/job_board?for=stability",
+  "https://boards.greenhouse.io/embed/job_board?for=huggingface",
+  "https://boards.greenhouse.io/embed/job_board?for=cohere",
+  "https://boards.greenhouse.io/embed/job_board?for=replicate",
+  "https://boards.greenhouse.io/embed/job_board?for=midjourney",
 ];
 
 const KEYWORDS = [
@@ -27,6 +41,19 @@ const KEYWORDS = [
   "safety",
   "red team",
   "developer relations",
+  "intern",
+  "coordinator",
+  "specialist",
+  "analyst",
+  "trainee",
+  "program",
+  "editorial",
+  "narrative",
+  "design",
+  "ux writing",
+  "conversation design",
+  "technical writing",
+  "documentation",
 ];
 
 export function categorizeTitle(title: string): string {
@@ -45,7 +72,15 @@ function matchesKeywords(title: string): boolean {
   return KEYWORDS.some((kw) => t.includes(kw));
 }
 
+function isEmbedBoard(boardUrl: string): boolean {
+  return boardUrl.includes("/embed/job_board?for=");
+}
+
 function companyFromUrl(boardUrl: string): string {
+  if (isEmbedBoard(boardUrl)) {
+    const url = new URL(boardUrl);
+    return url.searchParams.get("for") || "unknown";
+  }
   const parts = new URL(boardUrl).pathname.split("/").filter(Boolean);
   return parts[0] || "unknown";
 }
@@ -58,8 +93,12 @@ async function scrapeBoard(boardUrl: string): Promise<Partial<Job>[]> {
   const $ = cheerio.load(html);
   const company = companyFromUrl(boardUrl);
   const jobs: Partial<Job>[] = [];
+  const embed = isEmbedBoard(boardUrl);
 
-  $(".opening").each((_, el) => {
+  // Embed boards use div.opening with span.location; standard boards use .opening with .location
+  const selector = embed ? "div.opening" : ".opening";
+
+  $(selector).each((_, el) => {
     const anchor = $(el).find("a");
     const title = anchor.text().trim();
     if (!title || !matchesKeywords(title)) return;
@@ -70,7 +109,9 @@ async function scrapeBoard(boardUrl: string): Promise<Partial<Job>[]> {
       url = `${base.origin}${url}`;
     }
 
-    const locationText = $(el).find(".location").text().trim();
+    const locationText = embed
+      ? $(el).find("span.location").text().trim()
+      : $(el).find(".location").text().trim();
     const remote =
       /remote/i.test(locationText) || /anywhere/i.test(locationText);
 
@@ -95,17 +136,27 @@ async function scrapeBoard(boardUrl: string): Promise<Partial<Job>[]> {
   return jobs;
 }
 
-export async function scrapeGreenhouse(): Promise<Partial<Job>[]> {
+export interface ScrapeResult {
+  jobs: Partial<Job>[];
+  boardsScanned: number;
+  boardsFailed: number;
+}
+
+export async function scrapeGreenhouse(): Promise<ScrapeResult> {
   const results: Partial<Job>[] = [];
+  let boardsScanned = 0;
+  let boardsFailed = 0;
 
   for (const board of GREENHOUSE_BOARDS) {
     try {
       const jobs = await scrapeBoard(board);
       results.push(...jobs);
-    } catch {
-      // skip silently on failure
+      boardsScanned++;
+    } catch (err) {
+      boardsFailed++;
+      console.error(`Greenhouse scrape failed for ${board}:`, err);
     }
   }
 
-  return results;
+  return { jobs: results, boardsScanned, boardsFailed };
 }
