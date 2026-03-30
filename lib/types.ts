@@ -63,6 +63,7 @@ export interface FormField {
 
 export interface GeneratedMaterials {
   coverLetter: string;
+  resume: string;
   bioVariantUsed: string;
   resumePresetUsed: string;
   customAnswers: { question: string; answer: string }[];
@@ -93,6 +94,8 @@ export interface Job {
   formFields?: FormField[];
   status: JobStatus;
   generatedMaterials?: GeneratedMaterials;
+  validated?: boolean;
+  validatedAt?: string;
 }
 
 export interface Application {

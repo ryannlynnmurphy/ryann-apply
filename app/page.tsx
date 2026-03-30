@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type { Job } from "@/lib/types";
 import { loadState, updateState } from "@/lib/storage";
 import { scoreJob } from "@/lib/scorer";
 import { generateCoverLetterFromTemplate } from "@/lib/templates";
+import { generateResume } from "@/lib/resume";
 import SwipeDeck from "@/components/SwipeDeck";
 import FilterBar from "@/components/FilterBar";
 import MatchBadge from "@/components/MatchBadge";
 import JobForm from "@/components/JobForm";
+
+const VALIDATION_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export default function DiscoveryPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -18,11 +21,82 @@ export default function DiscoveryPage() {
   const [expandedJob, setExpandedJob] = useState<Job | null>(null);
   const [showJobForm, setShowJobForm] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [expiredCount, setExpiredCount] = useState(0);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchLocation, setSearchLocation] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchToast, setSearchToast] = useState<string | null>(null);
+  const [findingMore, setFindingMore] = useState(false);
+  const validationRan = useRef(false);
 
   useEffect(() => {
     const state = loadState();
     setJobs(state.jobs);
   }, []);
+
+  // Background validation on mount
+  useEffect(() => {
+    if (validationRan.current || jobs.length === 0) return;
+    validationRan.current = true;
+
+    const now = Date.now();
+    const jobsToValidate = jobs.filter(
+      (j) =>
+        j.status === "new" &&
+        (!j.validated ||
+          !j.validatedAt ||
+          now - new Date(j.validatedAt).getTime() > VALIDATION_INTERVAL_MS)
+    );
+
+    if (jobsToValidate.length === 0) return;
+
+    const urls = jobsToValidate.map((j) => j.url);
+
+    fetch("/api/validate-jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.results) return;
+
+        const statusMap = new Map<string, string>();
+        for (const r of data.results as { url: string; status: string }[]) {
+          statusMap.set(r.url, r.status);
+        }
+
+        let expired = 0;
+        const next = updateState((state) => ({
+          ...state,
+          jobs: state.jobs.map((j) => {
+            const result = statusMap.get(j.url);
+            if (!result) return j;
+
+            if (result === "expired" && j.status === "new") {
+              expired++;
+              return {
+                ...j,
+                status: "rejected" as const,
+                validated: true,
+                validatedAt: new Date().toISOString(),
+              };
+            }
+
+            return {
+              ...j,
+              validated: result !== "unknown",
+              validatedAt: new Date().toISOString(),
+            };
+          }),
+        }));
+
+        setJobs(next.jobs);
+        if (expired > 0) setExpiredCount(expired);
+      })
+      .catch((err) => console.error("Validation failed:", err));
+  }, [jobs]);
 
   const categories = useMemo(() => {
     const cats = new Set(jobs.map((j) => j.category));
@@ -71,6 +145,7 @@ export default function DiscoveryPage() {
 
         materials = {
           coverLetter,
+          resume: generateResume(job, profile),
           bioVariantUsed:
             preset?.defaultBioVariant || profile.bioVariants[0]?.id || "",
           resumePresetUsed: preset?.id || "",
@@ -124,6 +199,7 @@ export default function DiscoveryPage() {
                   ...j,
                   generatedMaterials: {
                     coverLetter: data.coverLetter,
+                    resume: j.generatedMaterials?.resume ?? "",
                     bioVariantUsed: j.generatedMaterials?.bioVariantUsed ?? "",
                     resumePresetUsed: j.generatedMaterials?.resumePresetUsed ?? "",
                     customAnswers: j.generatedMaterials?.customAnswers ?? [],
@@ -154,6 +230,124 @@ export default function DiscoveryPage() {
     setShowJobForm(false);
   }, []);
 
+  const handleSearch = useCallback(async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    setSearchToast(null);
+
+    try {
+      const res = await fetch("/api/search-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: searchQuery.trim(),
+          location: searchLocation.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+
+      if (!data.jobs || data.jobs.length === 0) {
+        setSearchToast(`No jobs found for '${searchQuery}' -- try different keywords`);
+        return;
+      }
+
+      const state = loadState();
+      const existingUrls = new Set(state.jobs.map((j: Job) => j.url));
+      const newJobs: Job[] = (data.jobs as Job[])
+        .filter((j) => !existingUrls.has(j.url))
+        .map((j) => ({
+          ...j,
+          matchScore: scoreJob(j, state.profile),
+        }))
+        .sort((a, b) => b.matchScore - a.matchScore);
+
+      if (newJobs.length === 0) {
+        setSearchToast(`No new jobs found for '${searchQuery}' -- already in your list`);
+        return;
+      }
+
+      const next = updateState((s) => ({
+        ...s,
+        jobs: [...s.jobs, ...newJobs],
+      }));
+      setJobs(next.jobs);
+      setSearchToast(`Found ${newJobs.length} new jobs matching '${searchQuery}'`);
+      setSearchQuery("");
+      setSearchLocation("");
+    } catch (err) {
+      console.error("Search failed:", err);
+      setSearchToast("Search failed -- please try again");
+    } finally {
+      setSearching(false);
+    }
+  }, [searchQuery, searchLocation]);
+
+  const handleFindMore = useCallback(
+    async (job: Job) => {
+      setFindingMore(true);
+      setSearchToast(null);
+
+      try {
+        const query = `${job.title} ${job.category}`;
+        const res = await fetch("/api/search-jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        const data = await res.json();
+
+        if (!data.jobs || data.jobs.length === 0) {
+          setSearchToast(`No similar jobs found for '${job.title}'`);
+          return;
+        }
+
+        const state = loadState();
+        const existingUrls = new Set(state.jobs.map((j: Job) => j.url));
+        const newJobs: Job[] = (data.jobs as Job[])
+          .filter((j) => !existingUrls.has(j.url))
+          .map((j) => ({
+            ...j,
+            matchScore: scoreJob(j, state.profile),
+          }))
+          .sort((a, b) => b.matchScore - a.matchScore);
+
+        if (newJobs.length === 0) {
+          setSearchToast("No new similar jobs found -- already in your list");
+          return;
+        }
+
+        const next = updateState((s) => ({
+          ...s,
+          jobs: [...s.jobs, ...newJobs],
+        }));
+        setJobs(next.jobs);
+        setSearchToast(`Found ${newJobs.length} jobs similar to '${job.title}'`);
+      } catch (err) {
+        console.error("Find more failed:", err);
+        setSearchToast("Search failed -- please try again");
+      } finally {
+        setFindingMore(false);
+      }
+    },
+    [],
+  );
+
+  // Dismiss toast after 5 seconds
+  useEffect(() => {
+    if (!searchToast) return;
+    const timer = setTimeout(() => setSearchToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [searchToast]);
+
+  // Dismiss expired count after 5 seconds
+  useEffect(() => {
+    if (expiredCount === 0) return;
+    const timer = setTimeout(() => setExpiredCount(0), 5000);
+    return () => clearTimeout(timer);
+  }, [expiredCount]);
+
+  const deckIsEmpty = filteredJobs.length === 0;
+
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
       {/* Header */}
@@ -166,13 +360,35 @@ export default function DiscoveryPage() {
             Find Your Next Role
           </h2>
         </div>
-        <button
-          onClick={() => setShowJobForm(true)}
-          className="px-4 py-2 text-xs uppercase tracking-wide border border-gold text-gold rounded hover:bg-gold/10 transition-colors"
-        >
-          Add Job URL
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSearch(true)}
+            className="px-4 py-2 text-xs uppercase tracking-wide border border-charcoal-light text-charcoal-light rounded hover:bg-charcoal/5 transition-colors"
+          >
+            Search Jobs
+          </button>
+          <button
+            onClick={() => setShowJobForm(true)}
+            className="px-4 py-2 text-xs uppercase tracking-wide border border-gold text-gold rounded hover:bg-gold/10 transition-colors"
+          >
+            Add Job URL
+          </button>
+        </div>
       </div>
+
+      {/* Expired count notification */}
+      {expiredCount > 0 && (
+        <div className="mb-4 px-4 py-2 bg-cream border border-border rounded-lg text-sm text-charcoal-light">
+          {expiredCount} expired job{expiredCount > 1 ? "s" : ""} removed
+        </div>
+      )}
+
+      {/* Toast */}
+      {searchToast && (
+        <div className="mb-4 px-4 py-2 bg-cream border border-border rounded-lg text-sm text-charcoal">
+          {searchToast}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="mb-6">
@@ -197,6 +413,53 @@ export default function DiscoveryPage() {
         onExpand={setExpandedJob}
       />
 
+      {/* Search section -- shown when deck is empty or via button */}
+      {(deckIsEmpty || showSearch) && (
+        <div className="mt-6 bg-white border border-border rounded-xl p-6">
+          <h3 className="font-display text-lg font-bold text-charcoal mb-1">
+            Search for More Jobs
+          </h3>
+          <p className="text-sm text-charcoal-light mb-4">
+            Find roles from remote job boards and aggregators.
+          </p>
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="e.g. junior copywriter, AI safety, community manager..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:border-gold focus:outline-none transition-colors"
+            />
+            <input
+              type="text"
+              placeholder="e.g. Remote, NYC, San Francisco..."
+              value={searchLocation}
+              onChange={(e) => setSearchLocation(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:border-gold focus:outline-none transition-colors"
+            />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSearch}
+                disabled={searching || !searchQuery.trim()}
+                className="px-5 py-2 text-sm bg-charcoal text-cream rounded-lg hover:bg-charcoal-mid transition-colors disabled:opacity-50"
+              >
+                {searching ? "Searching..." : "Search"}
+              </button>
+              {showSearch && !deckIsEmpty && (
+                <button
+                  onClick={() => setShowSearch(false)}
+                  className="text-sm text-charcoal-light hover:text-charcoal transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Expanded job modal */}
       {expandedJob && (
         <div
@@ -214,6 +477,10 @@ export default function DiscoveryPage() {
                   {expandedJob.title}
                 </h3>
                 <p className="text-sm text-charcoal-light">{expandedJob.company}</p>
+                {/* Unverified indicator */}
+                {!expandedJob.validated && (
+                  <span className="text-[10px] text-charcoal-light">unverified</span>
+                )}
               </div>
               <MatchBadge score={expandedJob.matchScore} />
             </div>
@@ -313,6 +580,13 @@ export default function DiscoveryPage() {
               >
                 View Application {"\u2197"}
               </a>
+              <button
+                onClick={() => handleFindMore(expandedJob)}
+                disabled={findingMore}
+                className="text-xs text-charcoal-light hover:text-gold transition-colors disabled:opacity-50"
+              >
+                {findingMore ? "Searching..." : "Find More Like This"}
+              </button>
               <button
                 onClick={() => {
                   updateJobStatus(expandedJob, "queued");

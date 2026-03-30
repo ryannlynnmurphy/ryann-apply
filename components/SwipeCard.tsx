@@ -59,6 +59,9 @@ export default function SwipeCard({ job, onExpand }: SwipeCardProps) {
             {job.title}
           </h3>
           <p className="text-xs text-charcoal-light truncate">{job.company}</p>
+          {!job.validated && (
+            <span className="text-[10px] text-charcoal-light">unverified</span>
+          )}
         </div>
         <MatchBadge score={job.matchScore} />
       </div>
