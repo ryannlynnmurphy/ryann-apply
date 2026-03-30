@@ -4,7 +4,7 @@ import { SEED_JOBS } from "./jobs-seed";
 
 const STORAGE_KEY = "ryann-apply";
 const VERSION_KEY = "ryann-apply-version";
-const CURRENT_VERSION = "2";
+const CURRENT_VERSION = "3";
 
 const DEFAULT_SETTINGS = {
   autoApplyEnabled: false,
