@@ -1,0 +1,140 @@
+import { Profile } from "./types";
+
+export const DEFAULT_PROFILE: Profile = {
+  name: "Ryann Lynn Murphy",
+  email: "ryannlynncontact@gmail.com",
+  phone: "",
+  location: "New York, NY",
+  linkedin: "",
+  github: "",
+  website: "ryannlynnmurphy.com",
+  education: [
+    {
+      id: "edu-1",
+      school: "Fordham University",
+      degree: "BA",
+      field: "Playwriting & Performance",
+      graduationYear: "2025",
+      notes: "Full scholarship",
+    },
+  ],
+  experience: [
+    {
+      id: "exp-1",
+      title: "Founder",
+      org: "HZL AI LLC",
+      startDate: "2026-03",
+      endDate: "present",
+      description: "Founded AI studio. Built Hazel (local voice AI on Raspberry Pi 5 with Whisper STT, Claude API, ElevenLabs TTS, Gmail/Calendar OAuth2, Home Assistant) and HZL Academy (Next.js 14 educational platform with dual-model verification architecture).",
+    },
+    {
+      id: "exp-2",
+      title: "Columnist",
+      org: "Fordham Observer",
+      startDate: "2021",
+      endDate: "2025",
+      description: "Published political and culture column for four years at Fordham's student newspaper.",
+    },
+    {
+      id: "exp-3",
+      title: "Produced Playwright",
+      org: "Edinburgh Fringe Festival",
+      startDate: "2024",
+      endDate: "2024",
+      description: "Produced and performed a one-woman show at the Edinburgh Fringe Festival.",
+    },
+    {
+      id: "exp-4",
+      title: "Playwright",
+      org: "Juilliard",
+      startDate: "2024",
+      endDate: "2024",
+      description: "SCOUTS received a professional reading at The Juilliard School.",
+    },
+  ],
+  skills: [
+    "Python", "Next.js", "TypeScript", "JavaScript", "Claude API",
+    "Whisper", "ElevenLabs", "Raspberry Pi", "Prompt Engineering",
+    "Editorial Writing", "Playwriting", "Creative Writing", "Social Media", "Brand Voice",
+  ],
+  languages: ["English", "German"],
+  bioVariants: [
+    {
+      id: "bio-tech",
+      label: "Tech-forward",
+      text: "Playwright who builds AI systems. BA in Playwriting from Fordham University. Built Hazel, a local voice AI on Raspberry Pi 5, and HZL Academy, an educational platform with dual-model verification. Founded HZL AI LLC.",
+    },
+    {
+      id: "bio-creative",
+      label: "Creative-forward",
+      text: "Writer and founder. Produced playwright (Edinburgh Fringe, Juilliard reading), published columnist (Fordham Observer), and founder of HZL AI LLC. Builds AI tools that serve creative and educational purposes.",
+    },
+    {
+      id: "bio-hybrid",
+      label: "Hybrid",
+      text: "AI builder with editorial background. Combines four years of published writing and produced playwriting with production AI systems built in Python and Next.js. Founder of HZL AI LLC.",
+    },
+  ],
+  coverLetterBlocks: [
+    {
+      id: "block-hazel",
+      label: "Hazel build",
+      text: "I built Hazel, a local-first voice assistant running on a Raspberry Pi 5 -- Whisper for speech recognition, Claude API with dynamic Haiku/Sonnet routing based on task complexity, ElevenLabs TTS, Gmail and Google Calendar OAuth2 integration, and a WebSocket backend I wrote in Python.",
+      tags: ["ai-safety", "devrel", "fellowship", "general"],
+    },
+    {
+      id: "block-academy",
+      label: "HZL Academy / dual-model verification",
+      text: "HZL Academy is an educational platform built in Next.js 14 with a dual-model verification architecture where Haiku and Sonnet cross-check each other's outputs before serving them to learners. I built that verification layer specifically because I didn't trust either model to be consistently accurate alone.",
+      tags: ["ai-safety", "fellowship", "general"],
+    },
+    {
+      id: "block-writing",
+      label: "Edinburgh / Juilliard / Observer",
+      text: "I produced a one-woman show at the Edinburgh Fringe Festival, had a play read professionally at Juilliard, and published a political and culture column at the Fordham Observer for four years. I know how to write under deadline, for different audiences, and at different lengths.",
+      tags: ["copywriting", "community", "devrel", "fellowship", "general"],
+    },
+    {
+      id: "block-safety",
+      label: "Why AI safety",
+      text: "I am building AI products -- a voice assistant that lives in someone's home, an educational platform aimed at children -- and the question of what these systems can be made to do by a motivated bad actor is one I think about constantly. I'd rather be on the side of finding those failures before they ship.",
+      tags: ["ai-safety", "fellowship"],
+    },
+    {
+      id: "block-german",
+      label: "German language",
+      text: "I also speak German, which is directly relevant to your work on global audiences and international markets.",
+      tags: ["ai-safety", "community", "general"],
+    },
+  ],
+  resumePresets: [
+    {
+      id: "preset-safety",
+      label: "AI / Safety",
+      leadWith: ["exp-1", "block-hazel", "block-academy", "block-safety"],
+      skills: ["Python", "Claude API", "Prompt Engineering", "Whisper", "Raspberry Pi"],
+      defaultBioVariant: "bio-tech",
+    },
+    {
+      id: "preset-copy",
+      label: "Copywriting",
+      leadWith: ["exp-2", "exp-3", "exp-4", "block-writing"],
+      skills: ["Editorial Writing", "Playwriting", "Creative Writing", "Brand Voice", "Social Media"],
+      defaultBioVariant: "bio-creative",
+    },
+    {
+      id: "preset-community",
+      label: "Community / Social",
+      leadWith: ["exp-2", "exp-1", "block-writing"],
+      skills: ["Social Media", "Brand Voice", "Editorial Writing", "Creative Writing"],
+      defaultBioVariant: "bio-creative",
+    },
+    {
+      id: "preset-fellowship",
+      label: "Fellowship",
+      leadWith: ["exp-1", "exp-3", "exp-4", "exp-2"],
+      skills: ["Python", "Next.js", "Claude API", "Playwriting", "Editorial Writing", "Prompt Engineering"],
+      defaultBioVariant: "bio-hybrid",
+    },
+  ],
+};
