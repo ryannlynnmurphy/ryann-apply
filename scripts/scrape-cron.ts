@@ -24,7 +24,12 @@ async function main() {
   );
 
   // Scrape all boards
-  const newJobs = await scrapeAllBoards(existingUrls, DEFAULT_PROFILE);
+  const result = await scrapeAllBoards(existingUrls, DEFAULT_PROFILE);
+  const newJobs = result.jobs;
+
+  console.log(
+    `Boards scanned: ${result.boardsScanned}, failed: ${result.boardsFailed}`
+  );
 
   // Merge new jobs with existing
   const merged = [...existingJobs, ...newJobs];

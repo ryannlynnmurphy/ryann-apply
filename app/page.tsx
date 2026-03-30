@@ -12,6 +12,9 @@ import MatchBadge from "@/components/MatchBadge";
 import JobForm from "@/components/JobForm";
 
 const VALIDATION_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const LAST_SCRAPE_KEY = "ryann-apply-last-scrape";
+const SCRAPE_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const TOTAL_BOARDS = 35; // approximate total boards across greenhouse + lever
 
 export default function DiscoveryPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -30,10 +33,66 @@ export default function DiscoveryPage() {
   const [findingMore, setFindingMore] = useState(false);
   const validationRan = useRef(false);
 
+  // Scrape state
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState("");
+  const [scanToast, setScanToast] = useState<string | null>(null);
+  const scrapeInFlight = useRef(false);
+
+  const runScrape = useCallback(async (existingJobs: Job[]) => {
+    if (scrapeInFlight.current) return;
+    scrapeInFlight.current = true;
+    setIsScanning(true);
+    setScanMessage(`Scanning ${TOTAL_BOARDS} job boards...`);
+    setScanToast(null);
+
+    try {
+      const existingUrls = existingJobs.map((j) => j.url);
+      const res = await fetch("/api/scrape-boards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ existingUrls }),
+      });
+      const data = await res.json();
+
+      const scannedMsg = `${data.boardsScanned ?? 0} boards scanned`;
+      const failedMsg = data.boardsFailed ? `, ${data.boardsFailed} failed` : "";
+
+      if (data.jobs && data.jobs.length > 0) {
+        const next = updateState((s) => ({
+          ...s,
+          jobs: [...s.jobs, ...data.jobs],
+        }));
+        setJobs(next.jobs);
+        setScanToast(`Found ${data.jobs.length} new jobs (${scannedMsg}${failedMsg})`);
+      } else {
+        setScanToast(`No new jobs found (${scannedMsg}${failedMsg})`);
+      }
+
+      localStorage.setItem(LAST_SCRAPE_KEY, Date.now().toString());
+    } catch (err) {
+      console.error("Scrape failed:", err);
+      setScanToast("Scan failed -- will retry later");
+    } finally {
+      setIsScanning(false);
+      setScanMessage("");
+      scrapeInFlight.current = false;
+    }
+  }, []);
+
   useEffect(() => {
     const state = loadState();
     setJobs(state.jobs);
-  }, []);
+
+    // Check if auto-scrape is needed
+    const lastScrape = localStorage.getItem(LAST_SCRAPE_KEY);
+    const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : 0;
+    const elapsed = Date.now() - lastScrapeTime;
+
+    if (elapsed > SCRAPE_INTERVAL_MS) {
+      runScrape(state.jobs);
+    }
+  }, [runScrape]);
 
   // Background validation on mount
   useEffect(() => {
@@ -332,12 +391,18 @@ export default function DiscoveryPage() {
     [],
   );
 
-  // Dismiss toast after 5 seconds
+  // Dismiss toasts after 5-6 seconds
   useEffect(() => {
     if (!searchToast) return;
     const timer = setTimeout(() => setSearchToast(null), 5000);
     return () => clearTimeout(timer);
   }, [searchToast]);
+
+  useEffect(() => {
+    if (!scanToast) return;
+    const timer = setTimeout(() => setScanToast(null), 6000);
+    return () => clearTimeout(timer);
+  }, [scanToast]);
 
   // Dismiss expired count after 5 seconds
   useEffect(() => {
@@ -350,6 +415,27 @@ export default function DiscoveryPage() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
+      {/* Scanning progress bar */}
+      {isScanning && (
+        <div className="fixed top-0 left-0 right-0 z-50">
+          <div className="h-0.5 bg-gold/20 w-full overflow-hidden">
+            <div className="h-full bg-gold animate-indeterminate-bar" />
+          </div>
+          <div className="text-center py-1.5 bg-cream/95 border-b border-gold/20">
+            <span className="text-xs tracking-wide text-charcoal-light">
+              {scanMessage}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Scan result toast */}
+      {scanToast && !isScanning && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-charcoal text-cream text-xs tracking-wide px-4 py-2 rounded-full shadow-lg animate-fade-in">
+          {scanToast}
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div>
@@ -361,6 +447,13 @@ export default function DiscoveryPage() {
           </h2>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => runScrape(jobs)}
+            disabled={isScanning}
+            className="px-3 py-2 text-xs uppercase tracking-wide border border-charcoal/20 text-charcoal-light rounded hover:bg-charcoal/5 transition-colors disabled:opacity-40"
+          >
+            {isScanning ? "Scanning..." : "Refresh"}
+          </button>
           <button
             onClick={() => setShowSearch(true)}
             className="px-4 py-2 text-xs uppercase tracking-wide border border-charcoal-light text-charcoal-light rounded hover:bg-charcoal/5 transition-colors"

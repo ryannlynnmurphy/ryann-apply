@@ -72,7 +72,13 @@ export interface GeneratedMaterials {
 export type JobSource = "seed" | "scraped" | "manual";
 export type JobStatus = "new" | "swiped-right" | "skipped" | "saved" | "queued" | "applied" | "rejected";
 export type ApplyTier = "full-auto" | "one-click" | "guided";
-export type ApplicationStatus = "ready" | "in-progress" | "submitted" | "rejected" | "offer";
+export type ApplicationStatus = "ready" | "in-progress" | "submitted" | "phone-screen" | "interview" | "rejected" | "offer";
+
+export interface FollowUp {
+  date: string;
+  type: "email" | "linkedin" | "other";
+  notes: string;
+}
 
 export interface Job {
   id: string;
@@ -103,6 +109,7 @@ export interface Application {
   status: ApplicationStatus;
   appliedAt?: string;
   notes: string;
+  followUps: FollowUp[];
 }
 
 export interface Settings {
