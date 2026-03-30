@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type { Job, ApplyTier } from "@/lib/types";
+import { loadState } from "@/lib/storage";
+import { findDuplicate } from "@/lib/duplicates";
 
 const CATEGORIES = [
   "ai-safety",
@@ -31,6 +33,7 @@ export default function JobForm({ onAdd, onClose }: JobFormProps) {
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState("");
   const [parsed, setParsed] = useState<ParsedData | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
   const [company, setCompany] = useState("");
@@ -39,10 +42,27 @@ export default function JobForm({ onAdd, onClose }: JobFormProps) {
   const [description, setDescription] = useState("");
   const [applyTier, setApplyTier] = useState<ApplyTier>("guided");
 
+  function checkDuplicate(t: string, c: string) {
+    if (!t.trim() || !c.trim()) {
+      setDuplicateWarning(null);
+      return;
+    }
+    const state = loadState();
+    const dup = findDuplicate({ title: t, company: c }, state.jobs);
+    if (dup) {
+      setDuplicateWarning(
+        `Possible duplicate: "${dup.title}" at ${dup.company} (${dup.status})`
+      );
+    } else {
+      setDuplicateWarning(null);
+    }
+  }
+
   async function handleParse() {
     if (!url.trim()) return;
     setParsing(true);
     setParseError("");
+    setDuplicateWarning(null);
 
     try {
       const res = await fetch("/api/parse-job", {
@@ -64,6 +84,11 @@ export default function JobForm({ onAdd, onClose }: JobFormProps) {
       setLocation(data.location || "");
       setDescription(data.description || "");
       setApplyTier(data.applyTier || "guided");
+
+      // Check for duplicates
+      if (data.title && data.company) {
+        checkDuplicate(data.title, data.company);
+      }
     } catch {
       setParseError("Failed to parse job URL");
     } finally {
@@ -130,6 +155,13 @@ export default function JobForm({ onAdd, onClose }: JobFormProps) {
           <p className="text-red-500 text-xs mb-3">{parseError}</p>
         )}
 
+        {/* Duplicate warning */}
+        {duplicateWarning && (
+          <p className="text-xs text-hzl-amber mb-3">
+            {duplicateWarning}
+          </p>
+        )}
+
         {/* Editable fields (shown after parsing) */}
         {parsed && (
           <div className="space-y-3">
@@ -140,7 +172,10 @@ export default function JobForm({ onAdd, onClose }: JobFormProps) {
               <input
                 type="text"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  checkDuplicate(e.target.value, company);
+                }}
                 className={inputClass}
               />
             </div>
@@ -153,7 +188,10 @@ export default function JobForm({ onAdd, onClose }: JobFormProps) {
                 <input
                   type="text"
                   value={company}
-                  onChange={(e) => setCompany(e.target.value)}
+                  onChange={(e) => {
+                    setCompany(e.target.value);
+                    checkDuplicate(title, e.target.value);
+                  }}
                   className={inputClass}
                 />
               </div>
@@ -204,7 +242,7 @@ export default function JobForm({ onAdd, onClose }: JobFormProps) {
               disabled={!title.trim()}
               className="w-full rounded-lg bg-charcoal text-cream text-sm px-4 py-2.5 font-medium hover:bg-charcoal-mid transition-colors disabled:opacity-50"
             >
-              Add to Discovery
+              {duplicateWarning ? "Add Anyway" : "Add to Discovery"}
             </button>
           </div>
         )}

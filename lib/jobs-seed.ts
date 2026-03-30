@@ -34,6 +34,7 @@ function job(
     status: "new",
     generatedMaterials: {
       coverLetter,
+      resume: "",
       bioVariantUsed: "creative-technologist",
       resumePresetUsed: "default",
       customAnswers: [],

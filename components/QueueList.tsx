@@ -11,6 +11,8 @@ interface QueueListProps {
   appliedJobIds: Set<string>;
   onSelectJob: (job: Job) => void;
   onUpdateCoverLetter: (jobId: string, coverLetter: string) => void;
+  onUpdateResume: (jobId: string, resume: string) => void;
+  onRegenerateResume: (jobId: string) => void;
   onApplyNow: (job: Job) => void;
 }
 
@@ -26,12 +28,18 @@ function isDeadlineSoon(deadline?: string): boolean {
   return diff > 0 && diff < 3 * 24 * 60 * 60 * 1000;
 }
 
+function wordCount(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
 function BriefingCard({
   job,
   profile,
   applied,
   onCustomize,
   onUpdateCoverLetter,
+  onUpdateResume,
+  onRegenerateResume,
   onApplyNow,
 }: {
   job: Job;
@@ -39,18 +47,31 @@ function BriefingCard({
   applied: boolean;
   onCustomize: () => void;
   onUpdateCoverLetter: (coverLetter: string) => void;
+  onUpdateResume: (resume: string) => void;
+  onRegenerateResume: () => void;
   onApplyNow: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<"cover-letter" | "resume">("cover-letter");
   const tier = TIER_LABELS[job.applyTier];
   const deadlineSoon = isDeadlineSoon(job.deadline);
   const coverLetter = job.generatedMaterials?.coverLetter || "";
+  const resume = job.generatedMaterials?.resume || "";
+  const clWords = wordCount(coverLetter);
+  const coverLetterShort = coverLetter.length > 0 && clWords < 250;
 
   const handleCoverLetterChange = useCallback(
     (value: string) => {
       onUpdateCoverLetter(value);
     },
     [onUpdateCoverLetter]
+  );
+
+  const handleResumeChange = useCallback(
+    (value: string) => {
+      onUpdateResume(value);
+    },
+    [onUpdateResume]
   );
 
   return (
@@ -118,41 +139,140 @@ function BriefingCard({
           </div>
         </div>
 
-        {/* Cover letter */}
-        {coverLetter ? (
-          expanded ? (
-            <div className="space-y-2">
-              <CoverLetterEditor
-                value={coverLetter}
-                onChange={handleCoverLetterChange}
-              />
-              <button
-                type="button"
-                onClick={() => setExpanded(false)}
-                className="text-xs text-charcoal-light hover:text-gold transition-colors"
+        {/* Tab switcher */}
+        <div className="flex gap-1.5 mb-3">
+          <button
+            type="button"
+            onClick={() => setActiveTab("cover-letter")}
+            className={`text-xs px-3 py-1 rounded-full transition-colors ${
+              activeTab === "cover-letter"
+                ? "bg-gold text-white"
+                : "bg-cream-dark text-charcoal-light hover:text-charcoal"
+            }`}
+          >
+            Cover Letter
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("resume")}
+            className={`text-xs px-3 py-1 rounded-full transition-colors ${
+              activeTab === "resume"
+                ? "bg-gold text-white"
+                : "bg-cream-dark text-charcoal-light hover:text-charcoal"
+            }`}
+          >
+            Resume
+          </button>
+        </div>
+
+        {/* Cover letter tab */}
+        {activeTab === "cover-letter" && (
+          <>
+            {coverLetterShort && (
+              <p className="text-xs text-hzl-amber mb-2">
+                This cover letter may be too short ({clWords} words). Consider regenerating.
+              </p>
+            )}
+            {coverLetter ? (
+              expanded ? (
+                <div className="space-y-2">
+                  <CoverLetterEditor
+                    value={coverLetter}
+                    onChange={handleCoverLetterChange}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(false)}
+                    className="text-xs text-charcoal-light hover:text-gold transition-colors"
+                  >
+                    collapse
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className="bg-cream-dark rounded p-4 max-h-64 overflow-y-auto cursor-pointer"
+                  onClick={() => setExpanded(true)}
+                >
+                  <p className="text-xs text-charcoal-light uppercase tracking-wide mb-1.5">
+                    Cover Letter
+                  </p>
+                  <p className="text-sm leading-relaxed text-charcoal whitespace-pre-wrap">
+                    {coverLetter}
+                  </p>
+                </div>
+              )
+            ) : (
+              <div className="bg-cream-dark rounded p-4">
+                <p className="text-sm text-charcoal-light italic">
+                  No cover letter generated yet.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Resume tab */}
+        {activeTab === "resume" && (
+          <>
+            {!resume ? (
+              <div className="bg-cream-dark rounded p-4">
+                <p className="text-xs text-hzl-amber mb-2">
+                  Resume not generated yet.
+                </p>
+                <button
+                  type="button"
+                  onClick={onRegenerateResume}
+                  className="text-xs px-3 py-1.5 rounded border border-gold text-gold hover:bg-gold/10 transition-colors"
+                >
+                  Generate Resume
+                </button>
+              </div>
+            ) : expanded ? (
+              <div className="space-y-2">
+                <div className="border border-border rounded p-4 bg-white">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs uppercase tracking-wider text-charcoal-light">
+                      Resume
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(false)}
+                        className="text-xs text-charcoal-light hover:text-charcoal transition-colors"
+                      >
+                        done
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard.writeText(resume)}
+                        className="text-xs text-charcoal-light hover:text-charcoal transition-colors"
+                      >
+                        copy
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    rows={20}
+                    value={resume}
+                    onChange={(e) => handleResumeChange(e.target.value)}
+                    className="w-full text-sm leading-relaxed border border-border rounded p-2 bg-cream font-mono resize-y focus:outline-none focus:border-gold"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div
+                className="bg-cream-dark rounded p-4 max-h-64 overflow-y-auto cursor-pointer"
+                onClick={() => setExpanded(true)}
               >
-                collapse
-              </button>
-            </div>
-          ) : (
-            <div
-              className="bg-cream-dark rounded p-4 max-h-64 overflow-y-auto cursor-pointer"
-              onClick={() => setExpanded(true)}
-            >
-              <p className="text-xs text-charcoal-light uppercase tracking-wide mb-1.5">
-                Cover Letter
-              </p>
-              <p className="text-sm leading-relaxed text-charcoal whitespace-pre-wrap">
-                {coverLetter}
-              </p>
-            </div>
-          )
-        ) : (
-          <div className="bg-cream-dark rounded p-4">
-            <p className="text-sm text-charcoal-light italic">
-              No cover letter generated yet.
-            </p>
-          </div>
+                <p className="text-xs text-charcoal-light uppercase tracking-wide mb-1.5">
+                  Resume
+                </p>
+                <pre className="text-sm leading-relaxed text-charcoal whitespace-pre-wrap font-sans">
+                  {resume}
+                </pre>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -185,6 +305,8 @@ export default function QueueList({
   appliedJobIds,
   onSelectJob,
   onUpdateCoverLetter,
+  onUpdateResume,
+  onRegenerateResume,
   onApplyNow,
 }: QueueListProps) {
   if (jobs.length === 0) {
@@ -210,6 +332,8 @@ export default function QueueList({
             applied={applied}
             onCustomize={() => onSelectJob(job)}
             onUpdateCoverLetter={(cl) => onUpdateCoverLetter(job.id, cl)}
+            onUpdateResume={(r) => onUpdateResume(job.id, r)}
+            onRegenerateResume={() => onRegenerateResume(job.id)}
             onApplyNow={() => onApplyNow(job)}
           />
         );

@@ -3,8 +3,10 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import type { Job, Profile } from "@/lib/types";
 import { loadState, updateState } from "@/lib/storage";
+import { generateResume } from "@/lib/resume";
 import QueueList from "@/components/QueueList";
 import WizardPanel from "@/components/WizardPanel";
+import PreSubmitChecklist from "@/components/PreSubmitChecklist";
 
 interface Toast {
   id: string;
@@ -16,6 +18,7 @@ export default function QueuePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [checklistJob, setChecklistJob] = useState<Job | null>(null);
 
   useEffect(() => {
     const state = loadState();
@@ -77,6 +80,7 @@ export default function QueuePage() {
                 generatedMaterials: {
                   ...(j.generatedMaterials ?? {
                     coverLetter: "",
+                    resume: "",
                     bioVariantUsed: "",
                     resumePresetUsed: "",
                     customAnswers: [],
@@ -95,6 +99,47 @@ export default function QueuePage() {
     [selectedJob]
   );
 
+  const handleUpdateResume = useCallback(
+    (jobId: string, resume: string) => {
+      const next = updateState((state) => ({
+        ...state,
+        jobs: state.jobs.map((j) =>
+          j.id === jobId
+            ? {
+                ...j,
+                generatedMaterials: {
+                  ...(j.generatedMaterials ?? {
+                    coverLetter: "",
+                    resume: "",
+                    bioVariantUsed: "",
+                    resumePresetUsed: "",
+                    customAnswers: [],
+                  }),
+                  resume,
+                },
+              }
+            : j
+        ),
+      }));
+      setJobs(next.jobs);
+      if (selectedJob && selectedJob.id === jobId) {
+        setSelectedJob(next.jobs.find((j) => j.id === jobId) ?? null);
+      }
+    },
+    [selectedJob]
+  );
+
+  const handleRegenerateResume = useCallback(
+    (jobId: string) => {
+      if (!profile) return;
+      const job = jobs.find((j) => j.id === jobId);
+      if (!job) return;
+      const resume = generateResume(job, profile);
+      handleUpdateResume(jobId, resume);
+    },
+    [jobs, profile, handleUpdateResume]
+  );
+
   const handleWizardUpdateMaterials = useCallback(
     (coverLetter: string) => {
       if (!selectedJob) return;
@@ -103,8 +148,24 @@ export default function QueuePage() {
     [selectedJob, handleUpdateCoverLetter]
   );
 
-  const handleApplyNow = useCallback(
+  const handleWizardUpdateResume = useCallback(
+    (resume: string) => {
+      if (!selectedJob) return;
+      handleUpdateResume(selectedJob.id, resume);
+    },
+    [selectedJob, handleUpdateResume]
+  );
+
+  const handleApplyNowRequest = useCallback(
     (job: Job) => {
+      setChecklistJob(job);
+    },
+    []
+  );
+
+  const handleApplyConfirmed = useCallback(
+    (job: Job) => {
+      setChecklistJob(null);
       const coverLetter = job.generatedMaterials?.coverLetter || "";
 
       if (job.applyTier === "full-auto") {
@@ -204,7 +265,9 @@ export default function QueuePage() {
                 appliedJobIds={appliedJobIds}
                 onSelectJob={handleSelectJob}
                 onUpdateCoverLetter={handleUpdateCoverLetter}
-                onApplyNow={handleApplyNow}
+                onUpdateResume={handleUpdateResume}
+                onRegenerateResume={handleRegenerateResume}
+                onApplyNow={handleApplyNowRequest}
               />
             )}
           </div>
@@ -217,12 +280,23 @@ export default function QueuePage() {
               job={selectedJob}
               profile={profile}
               onUpdateMaterials={handleWizardUpdateMaterials}
+              onUpdateResume={handleWizardUpdateResume}
               onMarkApplied={handleMarkApplied}
               onClose={handleCloseWizard}
             />
           </div>
         )}
       </div>
+
+      {/* Pre-submit checklist modal */}
+      {checklistJob && profile && (
+        <PreSubmitChecklist
+          job={checklistJob}
+          profile={profile}
+          onApply={() => handleApplyConfirmed(checklistJob)}
+          onClose={() => setChecklistJob(null)}
+        />
+      )}
 
       {/* Toast notifications */}
       <div className="fixed bottom-6 right-6 z-50 space-y-2">
