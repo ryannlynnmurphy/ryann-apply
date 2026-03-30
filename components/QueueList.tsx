@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import type { Job, Profile } from "@/lib/types";
+import { downloadPdf } from "@/lib/pdf/download";
 import MatchBadge from "./MatchBadge";
 import CoverLetterEditor from "./CoverLetterEditor";
 
@@ -189,6 +190,7 @@ function BriefingCard({
                   </button>
                 </div>
               ) : (
+                <div>
                 <div
                   className="bg-cream-dark rounded p-4 max-h-64 overflow-y-auto cursor-pointer"
                   onClick={() => setExpanded(true)}
@@ -200,6 +202,23 @@ function BriefingCard({
                     {coverLetter}
                   </p>
                 </div>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(coverLetter)}
+                    className="text-xs text-charcoal-light hover:text-charcoal transition-colors"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadPdf("cover-letter", coverLetter, profile)}
+                    className="text-xs border border-gold text-gold px-3 py-1 rounded hover:bg-gold/10 transition-colors"
+                  >
+                    Download PDF
+                  </button>
+                </div>
+              </div>
               )
             ) : (
               <div className="bg-cream-dark rounded p-4">
@@ -249,6 +268,13 @@ function BriefingCard({
                       >
                         copy
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadPdf("resume", resume, profile)}
+                        className="text-xs border border-gold text-gold px-3 py-1 rounded hover:bg-gold/10 transition-colors"
+                      >
+                        Download PDF
+                      </button>
                     </div>
                   </div>
                   <textarea
@@ -260,16 +286,34 @@ function BriefingCard({
                 </div>
               </div>
             ) : (
-              <div
-                className="bg-cream-dark rounded p-4 max-h-64 overflow-y-auto cursor-pointer"
-                onClick={() => setExpanded(true)}
-              >
-                <p className="text-xs text-charcoal-light uppercase tracking-wide mb-1.5">
-                  Resume
-                </p>
-                <pre className="text-sm leading-relaxed text-charcoal whitespace-pre-wrap font-sans">
-                  {resume}
-                </pre>
+              <div>
+                <div
+                  className="bg-cream-dark rounded p-4 max-h-64 overflow-y-auto cursor-pointer"
+                  onClick={() => setExpanded(true)}
+                >
+                  <p className="text-xs text-charcoal-light uppercase tracking-wide mb-1.5">
+                    Resume
+                  </p>
+                  <pre className="text-sm leading-relaxed text-charcoal whitespace-pre-wrap font-sans">
+                    {resume}
+                  </pre>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(resume)}
+                    className="text-xs text-charcoal-light hover:text-charcoal transition-colors"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadPdf("resume", resume, profile)}
+                    className="text-xs border border-gold text-gold px-3 py-1 rounded hover:bg-gold/10 transition-colors"
+                  >
+                    Download PDF
+                  </button>
+                </div>
               </div>
             )}
           </>

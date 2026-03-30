@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from "react";
 import type { Job, Profile, FormField } from "@/lib/types";
 import CoverLetterEditor from "./CoverLetterEditor";
+import { downloadPdf } from "@/lib/pdf/download";
 
 interface WizardPanelProps {
   job: Job;
@@ -256,6 +257,13 @@ export default function WizardPanel({
               >
                 {regenerating ? "generating..." : "regenerate with Claude"}
               </button>
+              <button
+                type="button"
+                onClick={() => downloadPdf("cover-letter", coverLetter, profile)}
+                className="text-xs border border-gold text-gold px-3 py-1 rounded hover:bg-gold/10 transition-colors"
+              >
+                Download PDF
+              </button>
             </div>
             <button
               type="button"
@@ -303,6 +311,13 @@ export default function WizardPanel({
                       className="text-xs text-charcoal-light hover:text-charcoal transition-colors"
                     >
                       {copiedField === "__resume__" ? "copied" : "copy"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadPdf("resume", resume, profile)}
+                      className="text-xs border border-gold text-gold px-3 py-1 rounded hover:bg-gold/10 transition-colors"
+                    >
+                      Download PDF
                     </button>
                   </div>
                 </div>

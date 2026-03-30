@@ -10,6 +10,7 @@ import SwipeDeck from "@/components/SwipeDeck";
 import FilterBar from "@/components/FilterBar";
 import MatchBadge from "@/components/MatchBadge";
 import JobForm from "@/components/JobForm";
+import { downloadPdf } from "@/lib/pdf/download";
 
 const VALIDATION_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const LAST_SCRAPE_KEY = "ryann-apply-last-scrape";
@@ -660,6 +661,36 @@ export default function DiscoveryPage() {
                 >
                   {generating ? "Generating..." : "Generate Cover Letter"}
                 </button>
+              </div>
+            )}
+
+            {/* PDF Downloads */}
+            {expandedJob.generatedMaterials && (
+              <div className="mb-4 flex gap-2">
+                {expandedJob.generatedMaterials.coverLetter && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const state = loadState();
+                      downloadPdf("cover-letter", expandedJob.generatedMaterials!.coverLetter, state.profile);
+                    }}
+                    className="text-xs border border-gold text-gold px-3 py-1 rounded hover:bg-gold/10 transition-colors"
+                  >
+                    Download Cover Letter PDF
+                  </button>
+                )}
+                {expandedJob.generatedMaterials.resume && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const state = loadState();
+                      downloadPdf("resume", expandedJob.generatedMaterials!.resume, state.profile);
+                    }}
+                    className="text-xs border border-gold text-gold px-3 py-1 rounded hover:bg-gold/10 transition-colors"
+                  >
+                    Download Resume PDF
+                  </button>
+                )}
               </div>
             )}
 
