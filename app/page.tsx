@@ -3,9 +3,11 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import type { Job } from "@/lib/types";
 import { loadState, updateState } from "@/lib/storage";
+import { scoreJob } from "@/lib/scorer";
 import SwipeDeck from "@/components/SwipeDeck";
 import FilterBar from "@/components/FilterBar";
 import MatchBadge from "@/components/MatchBadge";
+import JobForm from "@/components/JobForm";
 
 export default function DiscoveryPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -13,6 +15,7 @@ export default function DiscoveryPage() {
   const [showNewOnly, setShowNewOnly] = useState(true);
   const [minScore, setMinScore] = useState(0);
   const [expandedJob, setExpandedJob] = useState<Job | null>(null);
+  const [showJobForm, setShowJobForm] = useState(false);
 
   useEffect(() => {
     const state = loadState();
@@ -64,16 +67,35 @@ export default function DiscoveryPage() {
     [updateJobStatus],
   );
 
+  const handleAddJob = useCallback((job: Job) => {
+    const state = loadState();
+    const scored = { ...job, matchScore: scoreJob(job, state.profile) };
+    const next = updateState((s) => ({
+      ...s,
+      jobs: [...s.jobs, scored],
+    }));
+    setJobs(next.jobs);
+    setShowJobForm(false);
+  }, []);
+
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
       {/* Header */}
-      <div className="mb-6">
-        <span className="text-[10px] tracking-[0.25em] text-gold uppercase font-medium">
-          Discovery
-        </span>
-        <h2 className="font-display text-2xl font-bold text-charcoal">
-          Find Your Next Role
-        </h2>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <span className="text-[10px] tracking-[0.25em] text-gold uppercase font-medium">
+            Discovery
+          </span>
+          <h2 className="font-display text-2xl font-bold text-charcoal">
+            Find Your Next Role
+          </h2>
+        </div>
+        <button
+          onClick={() => setShowJobForm(true)}
+          className="px-4 py-2 text-xs uppercase tracking-wide border border-gold text-gold rounded hover:bg-gold/10 transition-colors"
+        >
+          Add Job URL
+        </button>
       </div>
 
       {/* Filters */}
@@ -216,6 +238,11 @@ export default function DiscoveryPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Add Job modal */}
+      {showJobForm && (
+        <JobForm onAdd={handleAddJob} onClose={() => setShowJobForm(false)} />
       )}
     </div>
   );
