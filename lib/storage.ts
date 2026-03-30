@@ -1,10 +1,12 @@
-import { AppState } from "./types";
+import { AppState, Job } from "./types";
 import { DEFAULT_PROFILE } from "./profile";
 import { SEED_JOBS } from "./jobs-seed";
+import { generateResume } from "./resume";
+import { generateCoverLetterFromTemplate } from "./templates";
 
 const STORAGE_KEY = "ryann-apply";
 const VERSION_KEY = "ryann-apply-version";
-const CURRENT_VERSION = "3";
+const CURRENT_VERSION = "4";
 
 const DEFAULT_SETTINGS = {
   autoApplyEnabled: false,
@@ -12,10 +14,34 @@ const DEFAULT_SETTINGS = {
   scrapeIntervalHours: 8,
 };
 
+function ensureMaterials(jobs: Job[]): Job[] {
+  const profile = DEFAULT_PROFILE;
+  return jobs.map((job) => {
+    if (!job.generatedMaterials?.coverLetter || !job.generatedMaterials?.resume) {
+      const coverLetter = job.generatedMaterials?.coverLetter || generateCoverLetterFromTemplate(job, profile);
+      const resume = job.generatedMaterials?.resume || generateResume(job, profile);
+      const preset = profile.resumePresets.find((p) =>
+        job.category.toLowerCase().includes(p.label.toLowerCase())
+      ) || profile.resumePresets[0];
+      return {
+        ...job,
+        generatedMaterials: {
+          coverLetter,
+          resume,
+          bioVariantUsed: job.generatedMaterials?.bioVariantUsed || preset?.defaultBioVariant || "",
+          resumePresetUsed: job.generatedMaterials?.resumePresetUsed || preset?.id || "",
+          customAnswers: job.generatedMaterials?.customAnswers || [],
+        },
+      };
+    }
+    return job;
+  });
+}
+
 function getDefaultState(): AppState {
   return {
     profile: DEFAULT_PROFILE,
-    jobs: SEED_JOBS,
+    jobs: ensureMaterials(SEED_JOBS),
     applications: [],
     settings: DEFAULT_SETTINGS,
   };
