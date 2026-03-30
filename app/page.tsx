@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import type { Job } from "@/lib/types";
 import { loadState, updateState } from "@/lib/storage";
 import { scoreJob } from "@/lib/scorer";
+import { generateCoverLetterFromTemplate } from "@/lib/templates";
 import SwipeDeck from "@/components/SwipeDeck";
 import FilterBar from "@/components/FilterBar";
 import MatchBadge from "@/components/MatchBadge";
@@ -56,8 +57,38 @@ export default function DiscoveryPage() {
   );
 
   const handleSwipeRight = useCallback(
-    (job: Job) => updateJobStatus(job, "queued"),
-    [updateJobStatus],
+    (job: Job) => {
+      const state = loadState();
+      const profile = state.profile;
+
+      let materials = job.generatedMaterials;
+      if (!materials?.coverLetter) {
+        const coverLetter = generateCoverLetterFromTemplate(job, profile);
+        const preset =
+          profile.resumePresets.find((p) =>
+            p.label.toLowerCase().includes(job.category.toLowerCase())
+          ) || profile.resumePresets[0];
+
+        materials = {
+          coverLetter,
+          bioVariantUsed:
+            preset?.defaultBioVariant || profile.bioVariants[0]?.id || "",
+          resumePresetUsed: preset?.id || "",
+          customAnswers: [],
+        };
+      }
+
+      const next = updateState((s) => ({
+        ...s,
+        jobs: s.jobs.map((j) =>
+          j.id === job.id
+            ? { ...j, status: "queued" as const, generatedMaterials: materials }
+            : j
+        ),
+      }));
+      setJobs(next.jobs);
+    },
+    [],
   );
   const handleSwipeLeft = useCallback(
     (job: Job) => updateJobStatus(job, "skipped"),

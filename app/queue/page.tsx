@@ -6,10 +6,16 @@ import { loadState, updateState } from "@/lib/storage";
 import QueueList from "@/components/QueueList";
 import WizardPanel from "@/components/WizardPanel";
 
+interface Toast {
+  id: string;
+  message: string;
+}
+
 export default function QueuePage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   useEffect(() => {
     const state = loadState();
@@ -17,15 +23,26 @@ export default function QueuePage() {
     setProfile(state.profile);
   }, []);
 
+  const showToast = useCallback((message: string) => {
+    const id = crypto.randomUUID();
+    setToasts((prev) => [...prev, { id, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  }, []);
+
   const queuedJobs = useMemo(() => {
     return jobs
-      .filter((j) => j.status === "swiped-right" || j.status === "queued" || j.status === "applied")
+      .filter(
+        (j) =>
+          j.status === "swiped-right" ||
+          j.status === "queued" ||
+          j.status === "applied"
+      )
       .sort((a, b) => {
-        // Deadline urgency first (jobs with sooner deadlines come first)
         const aDeadline = a.deadline ? new Date(a.deadline).getTime() : Infinity;
         const bDeadline = b.deadline ? new Date(b.deadline).getTime() : Infinity;
         if (aDeadline !== bDeadline) return aDeadline - bDeadline;
-        // Then by matchScore descending
         return b.matchScore - a.matchScore;
       });
   }, [jobs]);
@@ -34,7 +51,6 @@ export default function QueuePage() {
     const state = loadState();
     const ids = new Set<string>();
     state.applications.forEach((app) => ids.add(app.jobId));
-    // Also include jobs with status "applied"
     jobs.forEach((j) => {
       if (j.status === "applied") ids.add(j.id);
     });
@@ -42,19 +58,20 @@ export default function QueuePage() {
   }, [jobs]);
 
   const appliedCount = appliedJobIds.size;
-  const queuedCount = queuedJobs.filter((j) => !appliedJobIds.has(j.id)).length;
+  const queuedCount = queuedJobs.filter(
+    (j) => !appliedJobIds.has(j.id)
+  ).length;
 
   const handleSelectJob = useCallback((job: Job) => {
     setSelectedJob(job);
   }, []);
 
-  const handleUpdateMaterials = useCallback(
-    (coverLetter: string) => {
-      if (!selectedJob) return;
+  const handleUpdateCoverLetter = useCallback(
+    (jobId: string, coverLetter: string) => {
       const next = updateState((state) => ({
         ...state,
         jobs: state.jobs.map((j) =>
-          j.id === selectedJob.id
+          j.id === jobId
             ? {
                 ...j,
                 generatedMaterials: {
@@ -67,15 +84,67 @@ export default function QueuePage() {
                   coverLetter,
                 },
               }
-            : j,
+            : j
         ),
       }));
       setJobs(next.jobs);
-      setSelectedJob(
-        next.jobs.find((j) => j.id === selectedJob.id) ?? null,
-      );
+      if (selectedJob && selectedJob.id === jobId) {
+        setSelectedJob(next.jobs.find((j) => j.id === jobId) ?? null);
+      }
     },
-    [selectedJob],
+    [selectedJob]
+  );
+
+  const handleWizardUpdateMaterials = useCallback(
+    (coverLetter: string) => {
+      if (!selectedJob) return;
+      handleUpdateCoverLetter(selectedJob.id, coverLetter);
+    },
+    [selectedJob, handleUpdateCoverLetter]
+  );
+
+  const handleApplyNow = useCallback(
+    (job: Job) => {
+      const coverLetter = job.generatedMaterials?.coverLetter || "";
+
+      if (job.applyTier === "full-auto") {
+        // Full-auto: mark as applied, show toast
+        const next = updateState((state) => ({
+          ...state,
+          jobs: state.jobs.map((j) =>
+            j.id === job.id ? { ...j, status: "applied" as const } : j
+          ),
+          applications: [
+            ...state.applications.filter((a) => a.jobId !== job.id),
+            {
+              jobId: job.id,
+              status: "submitted" as const,
+              appliedAt: new Date().toISOString(),
+              notes: "",
+            },
+          ],
+        }));
+        setJobs(next.jobs);
+        showToast(`Application submitted to ${job.company}`);
+      } else if (job.applyTier === "one-click") {
+        // One-click: open URL, copy cover letter, show toast
+        if (coverLetter) {
+          navigator.clipboard.writeText(coverLetter);
+        }
+        window.open(job.url, "_blank", "noopener,noreferrer");
+        showToast(
+          `Browser opened with form for ${job.company} -- cover letter copied`
+        );
+      } else {
+        // Guided: open URL + copy cover letter + show toast
+        if (coverLetter) {
+          navigator.clipboard.writeText(coverLetter);
+        }
+        window.open(job.url, "_blank", "noopener,noreferrer");
+        showToast("Cover letter copied -- paste it in the application");
+      }
+    },
+    [showToast]
   );
 
   const handleMarkApplied = useCallback(() => {
@@ -83,7 +152,9 @@ export default function QueuePage() {
     const next = updateState((state) => ({
       ...state,
       jobs: state.jobs.map((j) =>
-        j.id === selectedJob.id ? { ...j, status: "applied" as const } : j,
+        j.id === selectedJob.id
+          ? { ...j, status: "applied" as const }
+          : j
       ),
       applications: [
         ...state.applications.filter((a) => a.jobId !== selectedJob.id),
@@ -105,14 +176,14 @@ export default function QueuePage() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)]">
-      <div className={`flex h-[calc(100vh-4rem)] ${selectedJob ? "" : ""}`}>
+      <div className={`flex h-[calc(100vh-4rem)]`}>
         {/* Left: Queue list */}
         <div
           className={`overflow-y-auto p-6 ${
             selectedJob ? "w-[60%] border-r border-border" : "w-full"
           }`}
         >
-          <div className={`${selectedJob ? "" : "max-w-4xl mx-auto"}`}>
+          <div className={`${selectedJob ? "" : "max-w-3xl mx-auto"}`}>
             {/* Header */}
             <div className="mb-6">
               <p className="text-xs font-mono uppercase tracking-wider text-gold mb-1">
@@ -126,11 +197,16 @@ export default function QueuePage() {
               </p>
             </div>
 
-            <QueueList
-              jobs={queuedJobs}
-              appliedJobIds={appliedJobIds}
-              onSelectJob={handleSelectJob}
-            />
+            {profile && (
+              <QueueList
+                jobs={queuedJobs}
+                profile={profile}
+                appliedJobIds={appliedJobIds}
+                onSelectJob={handleSelectJob}
+                onUpdateCoverLetter={handleUpdateCoverLetter}
+                onApplyNow={handleApplyNow}
+              />
+            )}
           </div>
         </div>
 
@@ -140,12 +216,24 @@ export default function QueuePage() {
             <WizardPanel
               job={selectedJob}
               profile={profile}
-              onUpdateMaterials={handleUpdateMaterials}
+              onUpdateMaterials={handleWizardUpdateMaterials}
               onMarkApplied={handleMarkApplied}
               onClose={handleCloseWizard}
             />
           </div>
         )}
+      </div>
+
+      {/* Toast notifications */}
+      <div className="fixed bottom-6 right-6 z-50 space-y-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className="bg-charcoal text-cream px-6 py-3 rounded-lg shadow-xl text-sm animate-in fade-in slide-in-from-bottom-2"
+          >
+            {toast.message}
+          </div>
+        ))}
       </div>
     </div>
   );
