@@ -61,6 +61,7 @@ export default function WizardPanel({
 
   const [coverLetterPasted, setCoverLetterPasted] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
   const coverLetter = job.generatedMaterials?.coverLetter ?? "";
 
@@ -76,6 +77,31 @@ export default function WizardPanel({
       return next;
     });
   }, []);
+
+  const regenerateLetter = useCallback(async () => {
+    setRegenerating(true);
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobDescription: job.description,
+          jobTitle: job.title,
+          company: job.company,
+          category: job.category,
+          profile,
+        }),
+      });
+      const data = await res.json();
+      if (data.coverLetter) {
+        onUpdateMaterials(data.coverLetter);
+      }
+    } catch (err) {
+      console.error("Cover letter regeneration failed:", err);
+    } finally {
+      setRegenerating(false);
+    }
+  }, [job, profile, onUpdateMaterials]);
 
   const handleCopyField = useCallback(async (name: string, value: string) => {
     await navigator.clipboard.writeText(value);
@@ -168,6 +194,14 @@ export default function WizardPanel({
               value={coverLetter}
               onChange={onUpdateMaterials}
             />
+            <button
+              type="button"
+              disabled={regenerating}
+              onClick={regenerateLetter}
+              className="text-xs text-charcoal-light hover:text-gold transition-colors disabled:opacity-50"
+            >
+              {regenerating ? "generating..." : "regenerate with Claude"}
+            </button>
             <button
               type="button"
               onClick={() => setCoverLetterPasted(true)}

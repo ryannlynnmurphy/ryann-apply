@@ -16,6 +16,7 @@ export default function DiscoveryPage() {
   const [minScore, setMinScore] = useState(0);
   const [expandedJob, setExpandedJob] = useState<Job | null>(null);
   const [showJobForm, setShowJobForm] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     const state = loadState();
@@ -66,6 +67,50 @@ export default function DiscoveryPage() {
     (job: Job) => updateJobStatus(job, "saved"),
     [updateJobStatus],
   );
+
+  const generateCoverLetter = useCallback(async (job: Job) => {
+    setGenerating(true);
+    try {
+      const state = loadState();
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobDescription: job.description,
+          jobTitle: job.title,
+          company: job.company,
+          category: job.category,
+          profile: state.profile,
+        }),
+      });
+      const data = await res.json();
+      if (data.coverLetter) {
+        const next = updateState((s) => ({
+          ...s,
+          jobs: s.jobs.map((j) =>
+            j.id === job.id
+              ? {
+                  ...j,
+                  generatedMaterials: {
+                    coverLetter: data.coverLetter,
+                    bioVariantUsed: j.generatedMaterials?.bioVariantUsed ?? "",
+                    resumePresetUsed: j.generatedMaterials?.resumePresetUsed ?? "",
+                    customAnswers: j.generatedMaterials?.customAnswers ?? [],
+                  },
+                }
+              : j,
+          ),
+        }));
+        setJobs(next.jobs);
+        const updatedJob = next.jobs.find((j) => j.id === job.id);
+        if (updatedJob) setExpandedJob(updatedJob);
+      }
+    } catch (err) {
+      console.error("Cover letter generation failed:", err);
+    } finally {
+      setGenerating(false);
+    }
+  }, []);
 
   const handleAddJob = useCallback((job: Job) => {
     const state = loadState();
@@ -203,8 +248,8 @@ export default function DiscoveryPage() {
               </div>
             )}
 
-            {/* Cover letter preview */}
-            {expandedJob.generatedMaterials?.coverLetter && (
+            {/* Cover letter preview or generate button */}
+            {expandedJob.generatedMaterials?.coverLetter ? (
               <div className="mb-4">
                 <h4 className="text-xs font-medium text-charcoal-light uppercase tracking-wide mb-1">
                   Cover Letter Preview
@@ -213,6 +258,17 @@ export default function DiscoveryPage() {
                   {expandedJob.generatedMaterials.coverLetter.slice(0, 300)}
                   {expandedJob.generatedMaterials.coverLetter.length > 300 ? "..." : ""}
                 </p>
+              </div>
+            ) : (
+              <div className="mb-4">
+                <button
+                  type="button"
+                  disabled={generating}
+                  onClick={() => generateCoverLetter(expandedJob)}
+                  className="px-4 py-2 text-sm border border-gold text-gold rounded hover:bg-gold/10 transition-colors disabled:opacity-50"
+                >
+                  {generating ? "Generating..." : "Generate Cover Letter"}
+                </button>
               </div>
             )}
 
