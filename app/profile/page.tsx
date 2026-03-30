@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Profile } from "@/lib/types";
-import { loadState, updateState } from "@/lib/storage";
+import { loadState, updateState, resetState } from "@/lib/storage";
 import ProfileEditor from "@/components/ProfileEditor";
 
 export default function ProfilePage() {
@@ -44,6 +44,22 @@ export default function ProfilePage() {
       {/* Editor */}
       <div className="bg-white border border-border rounded-lg p-6">
         <ProfileEditor profile={profile} onUpdate={handleUpdate} />
+      </div>
+
+      {/* Reset */}
+      <div className="mt-8 pt-6 border-t border-border">
+        <button
+          onClick={() => {
+            if (confirm("Reset all data to defaults? This will clear your application history and reload fresh job data.")) {
+              const fresh = resetState();
+              setProfile(fresh.profile);
+              window.location.reload();
+            }
+          }}
+          className="text-xs text-charcoal-light hover:text-hzl-red transition-colors"
+        >
+          Reset all data to defaults
+        </button>
       </div>
     </div>
   );
