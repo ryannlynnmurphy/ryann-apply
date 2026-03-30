@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "start": "next dev --port 3000",
+    "lint": "next lint",
+    "scrape": "npx tsx scripts/scrape-cron.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
